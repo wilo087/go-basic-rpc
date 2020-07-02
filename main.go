@@ -1,6 +1,11 @@
 package main
 
-import "fmt"
+import (
+	"log"
+	"net"
+	"net/http"
+	"net/rpc"
+)
 
 // Item struct
 type Item struct {
@@ -10,8 +15,11 @@ type Item struct {
 
 var database []Item
 
+// API object
+type API int
+
 // GetByName get the item for the database and return Item
-func GetByName(title string) Item {
+func (a *API) GetByName(title string, reply *Item) error {
 	var getItem Item
 
 	for _, val := range database {
@@ -19,36 +27,32 @@ func GetByName(title string) Item {
 			getItem = val
 		}
 	}
-	return getItem
-}
-
-// CreateItem return Item
-func CreateItem(item Item) Item {
-	database = append(database, item)
-	return item
+	*reply = getItem
+	return nil
 }
 
 // AddItem return void
-func AddItem(item Item) Item {
+func (a *API) AddItem(item Item, reply *Item) error {
 	database = append(database, item)
-	return item
+	*reply = item
+	return nil
 }
 
 // EditItem return Item
-func EditItem(title string, edit Item) Item {
+func (*API) EditItem(edit Item, reply *Item) error {
 	var changed Item
 	for idx, val := range database {
 		if val.title == edit.title {
-			database[idx] = edit
+			database[idx] = Item{edit.title, edit.body}
 			changed = edit
 		}
 	}
-
-	return changed
+	*reply = changed
+	return nil
 }
 
 // DeleteItem return item
-func DeleteItem(item Item) Item {
+func (*API) DeleteItem(item Item, reply *Item) error {
 	var del Item
 	for idx, val := range database {
 		if val.title == item.title && val.body == item.body {
@@ -57,30 +61,53 @@ func DeleteItem(item Item) Item {
 			break
 		}
 	}
-	return del
+	*reply = del
+
+	return nil
 }
 
 // main return void
 func main() {
-	fmt.Println("Initial database: ", database)
-	a := Item{"first", "This is the first item on the db"}
-	b := Item{"second", "This is the second item on the db"}
-	c := Item{"third", "This is the third item on the db"}
+	var api = new(API)
+	err := rpc.Register(api)
 
-	AddItem(a)
-	AddItem(b)
-	AddItem(c)
-	fmt.Println("Second database is: ", database)
+	if err != nil {
+		log.Fatal("error registering API to RPC", err)
+	}
 
-	DeleteItem(b)
-	fmt.Println("Third database is: ", database)
+	rpc.HandleHTTP()
 
-	EditItem("third", Item{"third new", "The new Item"})
-	fmt.Println("fourth database is: ", database)
+	listener, err := net.Listen("tcp", ":4040")
 
-	x := GetByName("first")
-	y := GetByName("third")
+	if err != nil {
+		log.Fatal("Listener error ", err)
+	}
 
-	fmt.Println(x, y)
+	log.Printf("serving rpc on por %d", 4040)
+	err = http.Serve(listener, nil)
+	if err != nil {
+		log.Fatal("error serving: ", err)
+	}
+
+	// fmt.Println("Initial database: ", database)
+	// a := Item{"first", "This is the first item on the db"}
+	// b := Item{"second", "This is the second item on the db"}
+	// c := Item{"third", "This is the third item on the db"}
+
+	// AddItem(a)
+	// AddItem(b)
+	// AddItem(c)
+	// fmt.Println("Second database is: ", database)
+
+	// DeleteItem(b)
+	// fmt.Println("Third database is: ", database)
+
+	// EditItem("third", Item{"third new", "The new Item"})
+	// fmt.Println("fourth database is: ", database)
+
+	// x := GetByName("first")
+	// y := GetByName("third")
+
+	// fmt.Println(x, y)
 
 }
